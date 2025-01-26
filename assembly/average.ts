@@ -1,12 +1,19 @@
-export function computeAverage(arr: StaticArray<f64>): f64 {
-  let sum: f64 = 0;
-  let length = arr.length;
+export function computePointsAverage(points: StaticArray<f64>): StaticArray<f64> {
+  let sumX: f64 = 0;
+  let sumY: f64 = 0;
+  let count: i32 = points.length / 2; // number of points
 
-  if (length === 0) return 0;
+  if (count === 0) return StaticArray.fromArray([0.0, 0.0]);
 
-  for (let i = 0; i < length; i++) {
-    sum += arr[i];
+  // Even indices (0,2,4...) are X coordinates
+  // Odd indices (1,3,5...) are Y coordinates
+  for (let i = 0; i < points.length; i += 2) {
+    sumX += points[i];     // X coordinate
+    sumY += points[i + 1]; // Y coordinate
   }
 
-  return sum / f64(length);
+  return StaticArray.fromArray([
+    sumX / f64(count),
+    sumY / f64(count)
+  ]);
 }

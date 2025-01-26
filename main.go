@@ -56,14 +56,24 @@ func main() {
 	defer instance.Close()
 
 	// Get the required exported functions
-	newArray, err := instance.Exports.GetFunction("__new")
+	newFunc, err := instance.Exports.GetFunction("__new")
 	if err != nil {
 		log.Fatal("Failed to get __new function:", err)
 	}
 
-	computeAverage, err := instance.Exports.GetFunction("computeAverage")
+	pinFunc, err := instance.Exports.GetFunction("__pin")
 	if err != nil {
-		log.Fatal("Failed to get computeAverage function:", err)
+		log.Fatal("Failed to get __pin function:", err)
+	}
+
+	unpinFunc, err := instance.Exports.GetFunction("__unpin")
+	if err != nil {
+		log.Fatal("Failed to get __unpin function:", err)
+	}
+
+	computeAverage, err := instance.Exports.GetFunction("computePointsAverage")
+	if err != nil {
+		log.Fatal("Failed to get computePointsAverage function:", err)
 	}
 
 	// Get memory
@@ -72,28 +82,64 @@ func main() {
 		log.Fatal("Failed to get memory:", err)
 	}
 
-	// Test numbers
-	numbers := []float64{2.5, 4.7, 8.1, 1.3, 9.2, 6.4, 3.8, 7.5, 5.9, 2.6}
+	// Test points as flat array [x1,y1,x2,y2,...]
+	points := []float64{
+		2.5, 1.0, // point 1 (x,y)
+		4.7, 2.5, // point 2 (x,y)
+		8.1, 3.7, // point 3 (x,y)
+		1.3, 4.2, // point 4 (x,y)
+		9.2, 5.8, // point 5 (x,y)
+	}
 
-	// Allocate memory for the array (8 bytes per float64)
-	// ID 3 is for StaticArray
-	arrayPtr, err := newArray(len(numbers)*8, 3)
+	// Allocate memory for the points array
+	arrayPtr, err := newFunc(len(points)*8, 3) // 3 for StaticArray, 8 bytes per f64
 	if err != nil {
 		log.Fatal("Failed to allocate memory:", err)
 	}
 
-	// Copy numbers to WebAssembly memory
-	for i, num := range numbers {
+	// Pin the memory
+	_, err = pinFunc(arrayPtr)
+	if err != nil {
+		log.Fatal("Failed to pin memory:", err)
+	}
+
+	// Copy points to WebAssembly memory
+	for i, value := range points {
 		offset := int(arrayPtr.(int32)) + (i * 8)
-		binary.LittleEndian.PutUint64(memory.Data()[offset:], math.Float64bits(num))
+		binary.LittleEndian.PutUint64(memory.Data()[offset:], math.Float64bits(value))
 	}
 
 	// Call the WebAssembly function
-	result, err := computeAverage(arrayPtr)
+	resultPtr, err := computeAverage(arrayPtr)
 	if err != nil {
 		log.Fatal("Failed to compute average:", err)
 	}
 
-	fmt.Printf("Numbers: %v\n", numbers)
-	fmt.Printf("Average: %.2f\n", result.(float64))
+	// Pin the result
+	_, err = pinFunc(resultPtr)
+	if err != nil {
+		log.Fatal("Failed to pin result memory:", err)
+	}
+
+	// Read results (averageX and averageY)
+	averageX := math.Float64frombits(binary.LittleEndian.Uint64(memory.Data()[int(resultPtr.(int32)):]))
+	averageY := math.Float64frombits(binary.LittleEndian.Uint64(memory.Data()[int(resultPtr.(int32))+8:]))
+
+	// Unpin memory
+	_, err = unpinFunc(resultPtr)
+	if err != nil {
+		log.Fatal("Failed to unpin result memory:", err)
+	}
+	_, err = unpinFunc(arrayPtr)
+	if err != nil {
+		log.Fatal("Failed to unpin array memory:", err)
+	}
+
+	// Print points in a readable format
+	fmt.Println("Points:")
+	for i := 0; i < len(points); i += 2 {
+		fmt.Printf("  (%.1f, %.1f)\n", points[i], points[i+1])
+	}
+	fmt.Printf("Average X: %.2f\n", averageX)
+	fmt.Printf("Average Y: %.2f\n", averageY)
 }
