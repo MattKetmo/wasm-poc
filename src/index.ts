@@ -4,18 +4,29 @@ import { fileURLToPath } from 'url';
 
 interface WasmExports {
   memory: WebAssembly.Memory;
-  computePointsAverage: (ptr: number, len: number) => number;
-  setPoint: (arrayPtr: number, index: number, x: number, y: number, z: number) => void;
-  getPoint: (arrayPtr: number, index: number) => void;
+  findBullishKlines: (ptr: number, len: number) => number;
+  setKline: (
+    arrayPtr: number,
+    index: number,
+    timestamp: bigint,
+    open: number,
+    close: number,
+    low: number,
+    high: number,
+    volume: number
+  ) => void;
   __new: (len: number, id: number) => number;
   __pin: (ptr: number) => number;
   __unpin: (ptr: number) => void;
 }
 
-interface Point {
-  x: number;
-  y: number;
-  z: number;
+interface Kline {
+  timestamp: bigint;
+  open: number;
+  close: number;
+  low: number;
+  high: number;
+  volume: number;
 }
 
 async function init() {
@@ -32,44 +43,76 @@ async function init() {
 
   const exports = wasmModule.instance.exports as unknown as WasmExports;
 
-  // Test points
-  const points: Point[] = [
-    { x: 2.5, y: 1.0, z: 10 },
-    { x: 4.7, y: 2.5, z: 20 },
-    { x: 8.1, y: 3.7, z: 15 },
-    { x: 1.3, y: 4.2, z: 30 },
-    { x: 9.2, y: 5.8, z: 25 }
+  // Test klines (10 entries)
+  const klines: Kline[] = [
+    // Timestamps are in milliseconds
+    { timestamp: 1706371200000n, open: 42000.50, close: 42150.75, low: 41950.25, high: 42200.00, volume: 100.5 },  // Bullish
+    { timestamp: 1706371500000n, open: 42150.75, close: 42100.25, low: 42080.00, high: 42180.50, volume: 85.3 },   // Bearish
+    { timestamp: 1706371800000n, open: 42100.25, close: 42250.50, low: 42090.75, high: 42300.00, volume: 120.7 },  // Bullish
+    { timestamp: 1706372100000n, open: 42250.50, close: 42200.25, low: 42150.00, high: 42280.25, volume: 95.2 },   // Bearish
+    { timestamp: 1706372400000n, open: 42200.25, close: 42350.75, low: 42180.50, high: 42400.00, volume: 110.4 },  // Bullish
+    { timestamp: 1706372700000n, open: 42350.75, close: 42320.25, low: 42300.00, high: 42380.50, volume: 88.6 },   // Bearish
+    { timestamp: 1706373000000n, open: 42320.25, close: 42450.50, low: 42310.75, high: 42500.00, volume: 130.2 },  // Bullish
+    { timestamp: 1706373300000n, open: 42450.50, close: 42400.25, low: 42380.00, high: 42480.25, volume: 92.8 },   // Bearish
+    { timestamp: 1706373600000n, open: 42400.25, close: 42550.75, low: 42390.50, high: 42600.00, volume: 115.9 },  // Bullish
+    { timestamp: 1706373900000n, open: 42550.75, close: 42650.25, low: 42530.00, high: 42680.50, volume: 105.1 }   // Bullish
   ];
 
-  // Allocate memory for the points array
-  // Size is number of points * size of Point (20 bytes: 8 for x + 8 for y + 4 for z)
-  const pointsPtr = exports.__new(points.length * 20, 3); // 3 for StaticArray
-  exports.__pin(pointsPtr);
+  // Allocate memory for the klines array
+  // Size is number of klines * size of Kline (48 bytes: 8+8+8+8+8+8)
+  const klinesPtr = exports.__new(klines.length * 48, 3); // 3 for StaticArray
+  exports.__pin(klinesPtr);
 
-  // Use the helper function to set points in memory
-  points.forEach((point, i) => {
-    exports.setPoint(pointsPtr, i, point.x, point.y, point.z);
+  // Use the helper function to set klines in memory
+  klines.forEach((kline, i) => {
+    exports.setKline(
+      klinesPtr,
+      i,
+      kline.timestamp,
+      kline.open,
+      kline.close,
+      kline.low,
+      kline.high,
+      kline.volume
+    );
   });
 
-  // Compute averages
-  const resultPtr = exports.computePointsAverage(pointsPtr, points.length);
+  // Find bullish klines
+  const resultPtr = exports.findBullishKlines(klinesPtr, klines.length);
   exports.__pin(resultPtr);
 
-  // Get memory as Float64Array to read results
-  const memory = new Float64Array(exports.memory.buffer);
-  const averageX = memory[resultPtr / 8];
-  const averageY = memory[resultPtr / 8 + 1];
-  const averageZ = memory[resultPtr / 8 + 2];
+  // Get memory as BigInt64Array to read timestamps
+  const memory = new BigInt64Array(exports.memory.buffer);
+
+  // Get the length of the result array (stored in memory before the array data)
+  const resultLength = memory[resultPtr / 8];
+
+  // Read timestamps
+  const bullishTimestamps: bigint[] = [];
+  for (let i = 0; i < resultLength; i++) {
+    bullishTimestamps.push(memory[resultPtr / 8 + i]);
+  }
 
   // Clean up
   exports.__unpin(resultPtr);
-  exports.__unpin(pointsPtr);
+  exports.__unpin(klinesPtr);
 
-  console.log("Points:");
-  points.forEach(p => console.log(`  (${p.x}, ${p.y}, ${p.z})`));
-  console.log("Average X:", averageX.toFixed(2));
-  console.log("Average Y:", averageY.toFixed(2));
-  console.log("Average Z:", averageZ.toFixed(2));
+  // Print results
+  console.log("Analyzed Klines:");
+  klines.forEach(k => {
+    const trend = k.close > k.open ? "BULLISH" : "BEARISH";
+    console.log(`Timestamp: ${new Date(Number(k.timestamp)).toISOString()}`);
+    console.log(`  Open: ${k.open.toFixed(2)}`);
+    console.log(`  Close: ${k.close.toFixed(2)}`);
+    console.log(`  Trend: ${trend}`);
+    console.log("---");
+  });
+
+  console.log("\nBullish Kline Timestamps:");
+  bullishTimestamps.forEach(timestamp => {
+    console.log(new Date(Number(timestamp)).toISOString());
+  });
+  console.log(`\nTotal Bullish Klines: ${bullishTimestamps.length}`);
 }
 
 init().catch(console.error);

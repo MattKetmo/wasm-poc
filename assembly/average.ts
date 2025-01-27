@@ -1,35 +1,48 @@
 @unmanaged
-class Point {
+class Kline {
   constructor(
-    public x: f64 = 0,    // 8 bytes
-    public y: f64 = 0,    // 8 bytes
-    public z: i32 = 0,    // 4 bytes
+    public timestamp: i64 = 0,  // 8 bytes
+    public open: f64 = 0,       // 8 bytes
+    public close: f64 = 0,      // 8 bytes
+    public low: f64 = 0,        // 8 bytes
+    public high: f64 = 0,       // 8 bytes
+    public volume: f64 = 0,     // 8 bytes
   ) {}
 }
 
-export function setPoint(points: StaticArray<Point>, index: i32, x: f64, y: f64, z: i32): void {
-  points[index] = new Point(x, y, z);
+export function setKline(
+  klines: StaticArray<Kline>,
+  index: i32,
+  timestamp: i64,
+  open: f64,
+  close: f64,
+  low: f64,
+  high: f64,
+  volume: f64
+): void {
+  klines[index] = new Kline(timestamp, open, close, low, high, volume);
 }
 
-export function getPoint(points: StaticArray<Point>, index: i32): Point {
-  return points[index];
-}
-
-export function computePointsAverage(points: StaticArray<Point>, len: i32): StaticArray<f64> {
-  let sumX: f64 = 0;
-  let sumY: f64 = 0;
-  let sumZ: f64 = 0;
-
+export function findBullishKlines(klines: StaticArray<Kline>, len: i32): StaticArray<i64> {
+  // First pass: count bullish klines
+  let bullishCount: i32 = 0;
   for (let i = 0; i < len; i++) {
-    const point = points[i];
-    sumX += point.x;
-    sumY += point.y;
-    sumZ += f64(point.z); // Convert i32 to f64 for averaging
+    if (klines[i].close > klines[i].open) {
+      bullishCount++;
+    }
   }
 
-  return StaticArray.fromArray([
-    sumX / f64(len),
-    sumY / f64(len),
-    sumZ / f64(len)
-  ]);
+  // Create result array
+  const result = new StaticArray<i64>(bullishCount);
+
+  // Second pass: fill result array
+  let resultIndex: i32 = 0;
+  for (let i = 0; i < len; i++) {
+    if (klines[i].close > klines[i].open) {
+      result[resultIndex] = klines[i].timestamp;
+      resultIndex++;
+    }
+  }
+
+  return result;
 }
