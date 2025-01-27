@@ -4,10 +4,17 @@ import { fileURLToPath } from 'url';
 
 interface WasmExports {
   memory: WebAssembly.Memory;
-  computePointsAverage: (ptr: number) => number;
+  computePointsAverage: (ptr: number, len: number) => number;
+  setPoint: (arrayPtr: number, index: number, x: number, y: number) => void;
+  getPoint: (arrayPtr: number, index: number) => void;
   __new: (len: number, id: number) => number;
   __pin: (ptr: number) => number;
   __unpin: (ptr: number) => void;
+}
+
+interface Point {
+  x: number;
+  y: number;
 }
 
 async function init() {
@@ -24,32 +31,31 @@ async function init() {
 
   const exports = wasmModule.instance.exports as unknown as WasmExports;
 
-  // Test points as flat array [x1,y1,x2,y2,...]
-  const points = [
-    2.5, 1.0,  // point 1 (x,y)
-    4.7, 2.5,  // point 2 (x,y)
-    8.1, 3.7,  // point 3 (x,y)
-    1.3, 4.2,  // point 4 (x,y)
-    9.2, 5.8   // point 5 (x,y)
+  // Test points
+  const points: Point[] = [
+    { x: 2.5, y: 1.0 },
+    { x: 4.7, y: 2.5 },
+    { x: 8.1, y: 3.7 },
+    { x: 1.3, y: 4.2 },
+    { x: 9.2, y: 5.8 }
   ];
 
   // Allocate memory for the points array
-  const pointsPtr = exports.__new(points.length * 8, 3); // 3 for StaticArray, 8 bytes per f64
+  // Size is number of points * size of Point (16 bytes: 8 for x + 8 for y)
+  const pointsPtr = exports.__new(points.length * 16, 3); // 3 for StaticArray
   exports.__pin(pointsPtr);
 
-  // Get memory as Float64Array
-  const memory = new Float64Array(exports.memory.buffer);
-
-  // Copy points to WebAssembly memory
-  points.forEach((value, i) => {
-    memory[pointsPtr / 8 + i] = value;
+  // Use the helper function to set points in memory
+  points.forEach((point, i) => {
+    exports.setPoint(pointsPtr, i, point.x, point.y);
   });
 
   // Compute averages
-  const resultPtr = exports.computePointsAverage(pointsPtr);
+  const resultPtr = exports.computePointsAverage(pointsPtr, points.length);
   exports.__pin(resultPtr);
 
-  // Read results
+  // Get memory as Float64Array to read results
+  const memory = new Float64Array(exports.memory.buffer);
   const averageX = memory[resultPtr / 8];
   const averageY = memory[resultPtr / 8 + 1];
 
@@ -58,12 +64,6 @@ async function init() {
   exports.__unpin(pointsPtr);
 
   console.log("Points:", points);
-  console.log("Points as (x,y):", points.reduce((acc, val, i) => {
-    if (i % 2 === 0) {
-      acc.push(`(${val}, ${points[i + 1]})`);
-    }
-    return acc;
-  }, [] as string[]));
   console.log("Average X:", averageX.toFixed(2));
   console.log("Average Y:", averageY.toFixed(2));
 }

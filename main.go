@@ -10,24 +10,24 @@ import (
 	"github.com/wasmerio/wasmer-go/wasmer"
 )
 
+type Point struct {
+	X, Y float64
+}
+
 func main() {
-	// Read the WebAssembly file
 	wasmBytes, err := os.ReadFile("build/average.wasm")
 	if err != nil {
 		log.Fatal("Failed to read WASM file:", err)
 	}
 
-	// Create an instance of WebAssembly runtime
 	engine := wasmer.NewEngine()
 	store := wasmer.NewStore(engine)
 
-	// Compile the module
 	module, err := wasmer.NewModule(store, wasmBytes)
 	if err != nil {
 		log.Fatal("Failed to compile module:", err)
 	}
 
-	// Create import object with required environment
 	importObject := wasmer.NewImportObject()
 	importObject.Register("env", map[string]wasmer.IntoExtern{
 		"abort": wasmer.NewFunction(
@@ -48,14 +48,12 @@ func main() {
 		),
 	})
 
-	// Instantiate the module
 	instance, err := wasmer.NewInstance(module, importObject)
 	if err != nil {
 		log.Fatal("Failed to instantiate module:", err)
 	}
 	defer instance.Close()
 
-	// Get the required exported functions
 	newFunc, err := instance.Exports.GetFunction("__new")
 	if err != nil {
 		log.Fatal("Failed to get __new function:", err)
@@ -71,61 +69,64 @@ func main() {
 		log.Fatal("Failed to get __unpin function:", err)
 	}
 
+	setPoint, err := instance.Exports.GetFunction("setPoint")
+	if err != nil {
+		log.Fatal("Failed to get setPoint function:", err)
+	}
+
 	computeAverage, err := instance.Exports.GetFunction("computePointsAverage")
 	if err != nil {
 		log.Fatal("Failed to get computePointsAverage function:", err)
 	}
 
-	// Get memory
 	memory, err := instance.Exports.GetMemory("memory")
 	if err != nil {
 		log.Fatal("Failed to get memory:", err)
 	}
 
-	// Test points as flat array [x1,y1,x2,y2,...]
-	points := []float64{
-		2.5, 1.0, // point 1 (x,y)
-		4.7, 2.5, // point 2 (x,y)
-		8.1, 3.7, // point 3 (x,y)
-		1.3, 4.2, // point 4 (x,y)
-		9.2, 5.8, // point 5 (x,y)
+	// Test points
+	points := []Point{
+		{X: 2.5, Y: 1.0},
+		{X: 4.7, Y: 2.5},
+		{X: 8.1, Y: 3.7},
+		{X: 1.3, Y: 4.2},
+		{X: 9.2, Y: 5.8},
 	}
 
-	// Allocate memory for the points array
-	arrayPtr, err := newFunc(len(points)*8, 3) // 3 for StaticArray, 8 bytes per f64
+	// Allocate memory for points array
+	arrayPtr, err := newFunc(len(points)*16, 3) // 16 bytes per Point
 	if err != nil {
 		log.Fatal("Failed to allocate memory:", err)
 	}
 
-	// Pin the memory
 	_, err = pinFunc(arrayPtr)
 	if err != nil {
 		log.Fatal("Failed to pin memory:", err)
 	}
 
-	// Copy points to WebAssembly memory
-	for i, value := range points {
-		offset := int(arrayPtr.(int32)) + (i * 8)
-		binary.LittleEndian.PutUint64(memory.Data()[offset:], math.Float64bits(value))
+	// Set points using the helper function
+	for i, p := range points {
+		_, err = setPoint(arrayPtr, i, p.X, p.Y)
+		if err != nil {
+			log.Fatal("Failed to set point:", err)
+		}
 	}
 
-	// Call the WebAssembly function
-	resultPtr, err := computeAverage(arrayPtr)
+	// Compute averages
+	resultPtr, err := computeAverage(arrayPtr, len(points))
 	if err != nil {
 		log.Fatal("Failed to compute average:", err)
 	}
 
-	// Pin the result
 	_, err = pinFunc(resultPtr)
 	if err != nil {
 		log.Fatal("Failed to pin result memory:", err)
 	}
 
-	// Read results (averageX and averageY)
+	// Read results
 	averageX := math.Float64frombits(binary.LittleEndian.Uint64(memory.Data()[int(resultPtr.(int32)):]))
 	averageY := math.Float64frombits(binary.LittleEndian.Uint64(memory.Data()[int(resultPtr.(int32))+8:]))
 
-	// Unpin memory
 	_, err = unpinFunc(resultPtr)
 	if err != nil {
 		log.Fatal("Failed to unpin result memory:", err)
@@ -135,10 +136,9 @@ func main() {
 		log.Fatal("Failed to unpin array memory:", err)
 	}
 
-	// Print points in a readable format
 	fmt.Println("Points:")
-	for i := 0; i < len(points); i += 2 {
-		fmt.Printf("  (%.1f, %.1f)\n", points[i], points[i+1])
+	for _, p := range points {
+		fmt.Printf("  (%.1f, %.1f)\n", p.X, p.Y)
 	}
 	fmt.Printf("Average X: %.2f\n", averageX)
 	fmt.Printf("Average Y: %.2f\n", averageY)
