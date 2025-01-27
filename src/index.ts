@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 interface WasmExports {
   memory: WebAssembly.Memory;
   computePointsAverage: (ptr: number, len: number) => number;
-  setPoint: (arrayPtr: number, index: number, x: number, y: number) => void;
+  setPoint: (arrayPtr: number, index: number, x: number, y: number, z: number) => void;
   getPoint: (arrayPtr: number, index: number) => void;
   __new: (len: number, id: number) => number;
   __pin: (ptr: number) => number;
@@ -15,6 +15,7 @@ interface WasmExports {
 interface Point {
   x: number;
   y: number;
+  z: number;
 }
 
 async function init() {
@@ -33,21 +34,21 @@ async function init() {
 
   // Test points
   const points: Point[] = [
-    { x: 2.5, y: 1.0 },
-    { x: 4.7, y: 2.5 },
-    { x: 8.1, y: 3.7 },
-    { x: 1.3, y: 4.2 },
-    { x: 9.2, y: 5.8 }
+    { x: 2.5, y: 1.0, z: 10 },
+    { x: 4.7, y: 2.5, z: 20 },
+    { x: 8.1, y: 3.7, z: 15 },
+    { x: 1.3, y: 4.2, z: 30 },
+    { x: 9.2, y: 5.8, z: 25 }
   ];
 
   // Allocate memory for the points array
-  // Size is number of points * size of Point (16 bytes: 8 for x + 8 for y)
-  const pointsPtr = exports.__new(points.length * 16, 3); // 3 for StaticArray
+  // Size is number of points * size of Point (20 bytes: 8 for x + 8 for y + 4 for z)
+  const pointsPtr = exports.__new(points.length * 20, 3); // 3 for StaticArray
   exports.__pin(pointsPtr);
 
   // Use the helper function to set points in memory
   points.forEach((point, i) => {
-    exports.setPoint(pointsPtr, i, point.x, point.y);
+    exports.setPoint(pointsPtr, i, point.x, point.y, point.z);
   });
 
   // Compute averages
@@ -58,14 +59,17 @@ async function init() {
   const memory = new Float64Array(exports.memory.buffer);
   const averageX = memory[resultPtr / 8];
   const averageY = memory[resultPtr / 8 + 1];
+  const averageZ = memory[resultPtr / 8 + 2];
 
   // Clean up
   exports.__unpin(resultPtr);
   exports.__unpin(pointsPtr);
 
-  console.log("Points:", points);
+  console.log("Points:");
+  points.forEach(p => console.log(`  (${p.x}, ${p.y}, ${p.z})`));
   console.log("Average X:", averageX.toFixed(2));
   console.log("Average Y:", averageY.toFixed(2));
+  console.log("Average Z:", averageZ.toFixed(2));
 }
 
 init().catch(console.error);

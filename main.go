@@ -12,6 +12,7 @@ import (
 
 type Point struct {
 	X, Y float64
+	Z    int32
 }
 
 func main() {
@@ -86,15 +87,15 @@ func main() {
 
 	// Test points
 	points := []Point{
-		{X: 2.5, Y: 1.0},
-		{X: 4.7, Y: 2.5},
-		{X: 8.1, Y: 3.7},
-		{X: 1.3, Y: 4.2},
-		{X: 9.2, Y: 5.8},
+		{X: 2.5, Y: 1.0, Z: 10},
+		{X: 4.7, Y: 2.5, Z: 20},
+		{X: 8.1, Y: 3.7, Z: 15},
+		{X: 1.3, Y: 4.2, Z: 30},
+		{X: 9.2, Y: 5.8, Z: 25},
 	}
 
-	// Allocate memory for points array
-	arrayPtr, err := newFunc(len(points)*16, 3) // 16 bytes per Point
+	// Allocate memory for points array (20 bytes per Point)
+	arrayPtr, err := newFunc(len(points)*20, 3)
 	if err != nil {
 		log.Fatal("Failed to allocate memory:", err)
 	}
@@ -106,7 +107,7 @@ func main() {
 
 	// Set points using the helper function
 	for i, p := range points {
-		_, err = setPoint(arrayPtr, i, p.X, p.Y)
+		_, err = setPoint(arrayPtr, i, p.X, p.Y, int32(p.Z))
 		if err != nil {
 			log.Fatal("Failed to set point:", err)
 		}
@@ -126,6 +127,7 @@ func main() {
 	// Read results
 	averageX := math.Float64frombits(binary.LittleEndian.Uint64(memory.Data()[int(resultPtr.(int32)):]))
 	averageY := math.Float64frombits(binary.LittleEndian.Uint64(memory.Data()[int(resultPtr.(int32))+8:]))
+	averageZ := math.Float64frombits(binary.LittleEndian.Uint64(memory.Data()[int(resultPtr.(int32))+16:]))
 
 	_, err = unpinFunc(resultPtr)
 	if err != nil {
@@ -138,8 +140,9 @@ func main() {
 
 	fmt.Println("Points:")
 	for _, p := range points {
-		fmt.Printf("  (%.1f, %.1f)\n", p.X, p.Y)
+		fmt.Printf("  (%.1f, %.1f, %d)\n", p.X, p.Y, p.Z)
 	}
 	fmt.Printf("Average X: %.2f\n", averageX)
 	fmt.Printf("Average Y: %.2f\n", averageY)
+	fmt.Printf("Average Z: %.2f\n", averageZ)
 }
