@@ -23,8 +23,8 @@ export function setKline(
   klines[index] = new Kline(timestamp, open, close, low, high, volume);
 }
 
-export function findBullishKlines(klines: StaticArray<Kline>, len: i32): StaticArray<i64> {
-  // First pass: count bullish klines
+export function findBullishKlines(klines: StaticArray<Kline>, len: i32): i32 {
+  // First count bullish klines
   let bullishCount: i32 = 0;
   for (let i = 0; i < len; i++) {
     if (klines[i].close > klines[i].open) {
@@ -32,10 +32,11 @@ export function findBullishKlines(klines: StaticArray<Kline>, len: i32): StaticA
     }
   }
 
-  // Create result array
-  const result = new StaticArray<i64>(bullishCount);
+  // Allocate result array
+  const resultPtr = __new(bullishCount * 8, idof<StaticArray<i64>>());
+  const result = changetype<StaticArray<i64>>(resultPtr);
 
-  // Second pass: fill result array
+  // Fill result array
   let resultIndex: i32 = 0;
   for (let i = 0; i < len; i++) {
     if (klines[i].close > klines[i].open) {
@@ -44,5 +45,5 @@ export function findBullishKlines(klines: StaticArray<Kline>, len: i32): StaticA
     }
   }
 
-  return result;
+  return resultPtr as i32;
 }

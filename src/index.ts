@@ -81,17 +81,17 @@ async function init() {
   const resultPtr = exports.findBullishKlines(klinesPtr, klines.length);
   exports.__pin(resultPtr);
 
-  // Get memory as BigInt64Array to read timestamps
-  const memory = new BigInt64Array(exports.memory.buffer);
+  // Count bullish klines first
+  const bullishCount = klines.filter(k => k.close > k.open).length;
 
-  // Get the length of the result array (stored in memory before the array data)
-  const resultLength = memory[resultPtr / 8];
+  // Read the timestamps
+  const resultView = new BigInt64Array(
+    exports.memory.buffer,
+    resultPtr,
+    bullishCount
+  );
 
-  // Read timestamps
-  const bullishTimestamps: bigint[] = [];
-  for (let i = 0; i < resultLength; i++) {
-    bullishTimestamps.push(memory[resultPtr / 8 + i]);
-  }
+  const bullishTimestamps = Array.from(resultView);
 
   // Clean up
   exports.__unpin(resultPtr);
