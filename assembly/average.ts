@@ -1,5 +1,5 @@
 @unmanaged
-export class Point {
+class Point {
   constructor(
     public x: f64 = 0,    // 8 bytes
     public y: f64 = 0,    // 8 bytes
