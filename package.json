@@ -9,7 +9,7 @@
     "asbuild:release": "asc assembly/index.ts --target release",
     "asbuild": "npm run asbuild:debug && npm run asbuild:release",
     "start": "npx serve .",
-    "build:as": "asc assembly/average.ts -o build/average.wasm --optimizeLevel 3 --runtime minimal --exportRuntime --exportTable",
+    "build:as": "asc assembly/index.ts -o build/release.wasm --optimizeLevel 3 --runtime minimal --exportRuntime --exportTable",
     "build:ts": "tsc"
   },
   "author": "",
