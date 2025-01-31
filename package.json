@@ -10,6 +10,7 @@
     "asbuild": "npm run asbuild:debug && npm run asbuild:release",
     "start": "npx serve .",
     "build:as": "asc assembly/index.ts -o build/release.wasm --optimizeLevel 3 --runtime minimal --exportRuntime --exportTable",
+    "build:client": "asc client/example.ts -o build/screener.wasm --optimizeLevel 3 --runtime minimal --exportRuntime --exportTable",
     "build:ts": "tsc"
   },
   "author": "",

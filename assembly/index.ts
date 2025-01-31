@@ -19,5 +19,19 @@ export function analyzeKlines(klines: StaticArray<Kline>, len: i32): i32 {
     return 0;
   }
 
-  return klines[0].close > klines[0].open ? 1 : 0;
+  // return klines[0].close > klines[0].open ? 1 : 0;
+  return screener(klines);
 }
+
+
+@external("client", "screener")
+declare function screener(klines: StaticArray<Kline>): i32;
+// declare function screener(open: f64, close: f64): i32;
+
+function screener0(klines: StaticArray<Kline>): i32 {
+  return klines[0].close < klines[0].open ? 1 : 0;
+}
+
+// This is just a declaration - the actual implementation will be in client code
+@external("client", "test")
+declare function test(): i32;
