@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import * as loader from "@assemblyscript/loader";
 
 type Kline = {
   timestamp: number;
@@ -17,7 +18,10 @@ interface ClientExports {
   memory: WebAssembly.Memory;
   __pin: (ptr: number) => number;
   __unpin: (ptr: number) => void;
+  __collect: () => void;
   __new: (size: number, id: number) => number;
+  __newArray: <T>(id: number, arr: T[]) => number;
+  KlineArray_ID: number;
   setKline: (
     arr: number,
     index: number,
@@ -41,72 +45,72 @@ async function initWasm() {
   const clientWasm = fs.readFileSync(path.resolve(__dirname, '../build/release.wasm'));
   const screenerWasm = fs.readFileSync(path.resolve(__dirname, '../build/screener.wasm'));
 
-  // Increase initial memory pages (each page is 64KB)
-  const memory = new WebAssembly.Memory({ initial: 100, maximum: 1000 }); // Increased memory
+  // Create shared memory
+  const memory = new WebAssembly.Memory({ shared: true, initial: 100, maximum: 1000 });
 
-
-  // Create import object for screener module
-  const screenerImports = {
-    env: {
-      abort: (_msg: number, _file: number, line: number, column: number) => {
-        console.error(`Abort at ${line}:${column}`);
-      },
-      memory,
-    }
-  };
-
-  // Instantiate screener module first
-  const screenerModule = await WebAssembly.instantiate(screenerWasm, screenerImports);
-  const screenerExports = screenerModule.instance.exports as unknown as ScreenerExports;
-
-  // Create import object for client module
-  const clientImports = {
-    env: {
-      abort: (_msg: number, _file: number, line: number, column: number) => {
-        console.error(`Abort at ${line}:${column}`);
-      },
-      memory,
+  const env = {
+    abort: (_msg: number, _file: number, line: number, column: number) => {
+      console.error(`Abort at ${line}:${column}`);
     },
-    client: {
-      screener: (arr: number) => screenerExports.screener(arr)
-    }
+    memory,
   };
 
-  // Instantiate client module
-  const clientModule = await WebAssembly.instantiate(clientWasm, clientImports);
-  const clientExports = clientModule.instance.exports as unknown as ClientExports;
+  // Instantiate screener module first using the loader
+  const screenerModule = await loader.instantiate(screenerWasm, {
+    env,
+  });
 
-  return { clientExports, screenerExports };
+  // Instantiate client module using the loader
+  const clientModule = await loader.instantiate(clientWasm, {
+    env,
+    screener: {
+      screener: (ptr: number) => {
+        console.log('screener', ptr);
+        return (screenerModule.exports as unknown as ScreenerExports).screener(ptr)
+      }
+    }
+  });
+
+  return {
+    clientExports: clientModule.exports as unknown as ClientExports,
+    screenerExports: screenerModule.exports as unknown as ScreenerExports,
+  };
 }
 
 // Usage example
 async function analyze(klines: Kline[]) {
   const { clientExports } = await initWasm();
 
-  // Allocate memory for the array (assuming id 1 for array type)
-  const arrayPtr = clientExports.__new(klines.length * 16, 1);
+  // Create array in WebAssembly memory
+  // const arrayPtr = clientExports.__newArray(clientExports.KlineArray_ID, klines);
+  // const pinnedPtr = clientExports.__pin(arrayPtr);
+
+  const arrayPtr = clientExports.__new(klines.length * 16, clientExports.KlineArray_ID);
   const pinnedPtr = clientExports.__pin(arrayPtr);
+  console.log('arrayPtr', arrayPtr);
+  console.log('pinnedPtr', pinnedPtr);
+
+  // Fill the array with kline data
+  klines.forEach((kline, index) => {
+    clientExports.setKline(
+      pinnedPtr,
+      index,
+      BigInt(kline.timestamp),
+      kline.open,
+      kline.close,
+      kline.low,
+      kline.high,
+      kline.volume
+    );
+  });
 
   try {
-    // Fill the array with kline data
-    klines.forEach((kline, index) => {
-      clientExports.setKline(
-        pinnedPtr,
-        index,
-        BigInt(kline.timestamp),
-        kline.open,
-        kline.close,
-        kline.low,
-        kline.high,
-        kline.volume
-      );
-    });
-
     // Analyze the klines
     const result = clientExports.analyzeKlines(pinnedPtr, klines.length);
     return result;
   } finally {
     clientExports.__unpin(pinnedPtr);
+    clientExports.__collect();
   }
 }
 
@@ -117,6 +121,30 @@ async function main() {
       timestamp: Date.now(),
       open: 100,
       close: 105,
+      low: 98,
+      high: 106,
+      volume: 1000
+    },
+    {
+      timestamp: Date.now(),
+      open: 99,
+      close: 100,
+      low: 98,
+      high: 106,
+      volume: 1000
+    },
+    {
+      timestamp: Date.now(),
+      open: 99,
+      close: 100,
+      low: 98,
+      high: 106,
+      volume: 1000
+    },
+    {
+      timestamp: Date.now(),
+      open: 80,
+      close: 100,
       low: 98,
       high: 106,
       volume: 1000
