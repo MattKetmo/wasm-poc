@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "asbuild:1": "asc assembly/module1.ts --bindings esm --importMemory --exportRuntime --exportTable -O3z --outFile build/module1.wasm --textFile build/module1.wat",
-    "asbuild:2": "asc assembly/module2.ts --bindings esm --importMemory --memoryBase=4096 --exportRuntime --exportTable -O3z --outFile build/module2.wasm --textFile build/module2.wat",
-    "asbuild": "npm run asbuild:1 && npm run asbuild:2",
-    "start": "tsx scripts/index.ts"
+    "all": "npm run build:transform && npm run asbuild",
+    "asbuild": "asc assembly/module.ts --bindings esm --exportRuntime --exportTable -O3z --outFile build/module.wasm --textFile build/module.wat --transform ./transform/lib/index.js",
+    "build:transform": "tsc -p transform",
+    "start": "tsx scripts/index.ts",
+    "test:transformer": "node scripts/test-transformer.cjs"
   },
   "author": "",
   "license": "ISC",
@@ -18,6 +19,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@assemblyscript/loader": "^0.27.35"
+    "@assemblyscript/loader": "^0.27.35",
+    "visitor-as": "^0.11.4"
   }
 }
