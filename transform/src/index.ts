@@ -1,86 +1,68 @@
-import { Transform } from "assemblyscript/dist/transform.js";
+import { SimpleParser, TransformVisitor } from "visitor-as/dist/index.js";
 import {
-  ClassDeclaration,
-  FieldDeclaration,
+  Expression,
+  CallExpression,
   IdentifierExpression,
   Parser,
   Source,
   NodeKind,
   FunctionDeclaration,
-  CommonFlags,
-  ImportStatement,
-  Node,
-  Tokenizer,
-  SourceKind,
-  NamedTypeNode,
-  Range,
-  FEATURE_SIMD,
-  FunctionExpression,
-  MethodDeclaration,
-  Statement,
 } from "assemblyscript/dist/assemblyscript.js";
 
-class EntrypointTransformer extends Transform {
-  afterParse(parser: Parser) {
+const entrypointFunctionText = `
+export function entrypoint(): i32 {
+  return score(new Point(3, 4));
+}
+`;
+
+class EntrypointTransformer extends TransformVisitor {
+  afterParse(parser: Parser): void {
     const sources = parser.sources;
 
-    for (const source of sources) {
-      if (!source.text) continue;
+    sources.forEach((source) => {
+      if (!source.text) return;
 
-      // Process each source file
-      this.processSource(source, parser);
-    }
-
-    // return super.afterParse(parser);
-  }
-
-  processSource(source: Source, parser: Parser): void {
-    const statements = source.statements;
-    if (!statements) return;
-
-    for (let i = 0; i < statements.length; i++) {
-      const statement = statements[i];
-
-      // Check if it's a function declaration
-      if (statement.kind === NodeKind.FunctionDeclaration) {
-        const functionDecl = statement as FunctionDeclaration;
-        // Check if the function name is 'score'
-        if (functionDecl.name.text === "score") {
-          console.log("found score function")
-          // Create a new entrypoint function
-          this.createEntrypointFunction(source, parser);
-          break;
-        }
+      if (source.simplePath === "module") {
+        const entrypointFunction = SimpleParser.parseTopLevelStatement(
+          entrypointFunctionText
+        );
+        source.statements.push(entrypointFunction);
       }
-    }
+
+      this.visit(source);
+    });
   }
 
-  createEntrypointFunction(source: Source, parser: Parser): void {
-    // Create a new function named 'entrypoint'
-//     const entrypointFunctionText = `
-// export function entrypoint(): i32 {
-//   const point = new Point(3, 6);
-//   return score(point);
-// }`;
+  override visitFunctionDeclaration(
+    node: FunctionDeclaration,
+    isDefault = false
+  ): FunctionDeclaration {
+    // const name = node.name.text;
+    // if (name !== "score") {
+    //   return super.visitFunctionDeclaration(node, isDefault);
+    // }
+    return super.visitFunctionDeclaration(node, isDefault);
+
+    console.log("visitFunctionDeclaration", node.name.text);
+
+    // Create an entrypoint function that calls score with a new Point(1,2)
     const entrypointFunctionText = `
 export function entrypoint(): i32 {
+  // return score(new Point(1, 2));
   return 42;
 }`;
-console.log(source)
-console.log(parser)
 
-    // Parse the new function
-    const entrypointFunction = parser.parseFile(
-      entrypointFunctionText,
-      "entrypoint.ts",
-      true
+    // Parse the entrypoint function text into an AST node
+    const entrypointFunction = SimpleParser.parseStatement(
+      entrypointFunctionText
     );
 
-    // Add the new function to the source
-    // const parsedSource = parser.sources[parser.sources.length - 1];
-    // if (parsedSource && parsedSource.statements && parsedSource.statements.length > 0) {
-    //   source.statements.push(parsedSource.statements[0]);
-    // }
+    // Add the entrypoint function to the source file
+    if (node.range && node.range.source && node.range.source.statements) {
+      node.range.source.statements.push(entrypointFunction);
+    }
+
+    return super.visitFunctionDeclaration(node, isDefault);
   }
 }
 

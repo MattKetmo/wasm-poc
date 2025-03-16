@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "all": "npm run build:transform && npm run asbuild",
+    "all": "npm run build:transform && npm run asbuild && npm run start",
     "asbuild": "asc assembly/module.ts --bindings esm --exportRuntime --exportTable -O3z --outFile build/module.wasm --textFile build/module.wat --transform ./transform/lib/index.js",
     "build:transform": "tsc -p transform",
     "start": "tsx scripts/index.ts",

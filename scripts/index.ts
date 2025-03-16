@@ -2,7 +2,7 @@ import fs from "fs";
 import * as loader from "@assemblyscript/loader";
 
 interface Module1Exports extends Record<string, unknown> {
-  entrypoint: () => number;
+  entrypoint: (x: number, y: number) => number;
 }
 
 async function main() {
@@ -19,7 +19,7 @@ async function main() {
   };
 
   const mod = await loader.instantiate<Module1Exports>(
-    fs.readFileSync("./build/module1.wasm"),
+    fs.readFileSync("./build/module.wasm"),
     {
       ...imports,
     }
@@ -27,7 +27,7 @@ async function main() {
 
   __getString = mod.exports.__getString;
 
-  const result = mod.exports.entrypoint();
+  const result = mod.exports.entrypoint(3, 2);
 
   console.log("Result:", result);
 }
