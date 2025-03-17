@@ -3,7 +3,7 @@ import { Parser } from "assemblyscript/dist/assemblyscript.js";
 
 const entrypointFunctionText = `
 export function entrypoint(): i32 {
-  return score(new Point(3, 4));
+  return score([new Point(1, 2), new Point(3, 4)]);
 }
 `;
 
